@@ -1,9 +1,11 @@
 object Form1: TForm1
-  Left = 261
-  Top = 102
-  Width = 928
-  Height = 480
+  Left = 324
+  Top = 97
+  BorderIcons = [biSystemMenu]
+  BorderStyle = bsSingle
   Caption = 'Form1'
+  ClientHeight = 450
+  ClientWidth = 1000
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -11,14 +13,11 @@ object Form1: TForm1
   Font.Name = 'MS Sans Serif'
   Font.Style = []
   OldCreateOrder = False
+  OnCreate = FormCreate
+  OnKeyPress = FormKeyPress
+  OnKeyUp = FormKeyUp
   PixelsPerInch = 96
   TextHeight = 13
-  object PaintBox1: TPaintBox
-    Left = 0
-    Top = 0
-    Width = 905
-    Height = 433
-  end
   object Timer1: TTimer
     Interval = 10
     OnTimer = Timer1Timer
