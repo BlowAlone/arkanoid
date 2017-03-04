@@ -17,6 +17,7 @@ Graphics::TBitmap *back;
 // Координаты курсора
 //POINT p;
 int dir = 0;
+bool IsComplite = false;
 
 int LevelData[2][400]=
 {
@@ -65,8 +66,9 @@ int LevelData[2][400]=
 };
 
 class ball; // Объявление класса ball
-
+class block;
 ball *ball1;
+block *blocks[400];
 
 //---------------------------------------------------------------------------
 __fastcall TForm1::TForm1(TComponent* Owner)
@@ -96,10 +98,13 @@ protected:
 
 class block: private object
 {
+  friend void Collision (ball *ball1, block *block1);
 private:
   int lifes;
+  const double width, height;
 public:
-  block (double x1, double y1, int lf): object(x1, y1), lifes(lf){}
+  block (double x1, double y1, int lf): object(x1, y1), lifes(lf), width(Form1->ClientWidth / 20),
+                                        height(Form1->ClientHeight / 30) {}
   void Draw (void)
   {
     if (lifes == 3)
@@ -108,9 +113,12 @@ public:
       back->Canvas->Brush->Color = clYellow;
     else if (lifes == 1)
       back->Canvas->Brush->Color = clRed;
-    else
-      back->Canvas->Brush->Color = clWhite;
-    back->Canvas->Rectangle(x, y, x + Form1->ClientWidth / 20, y + Form1->ClientHeight / 30);
+    if (lifes > 0)
+    back->Canvas->Rectangle(x, y, x + width, y + height);
+  }
+  bool IsAlive( void )
+  {
+    return lifes > 0;
   }
 };
 
@@ -167,6 +175,7 @@ public:
 //Класс мяча
 class ball: private object
 {
+  friend void Collision (ball *ball1, block *block1);
   friend void Collision (ball *ball1, arcon *arcon1); // Дружественная функция Collision
 private:
   int lifes;
@@ -180,14 +189,11 @@ public:
   // Входные параметры: отсутствуют
   // Выходные параметры: отсутствуют
   // ------------------------------
-  ball( void ): object(50, 70), r(15), vx(4), vy(5), maxv(sqrt(16 + 25)), lifes(3)
+  ball( void ): object(Form1->ClientWidth / 2, Form1->ClientHeight - 100), r(15), maxv(6), lifes(3)
   {
-    //ball=new Graphics::TBitmap();
-    /*ball->Canvas->Brush->Color = clBlack;
-    ball->Width = 2 * r;
-    ball->Height = 2 * r;
-    ball->Canvas->Ellipse(0, 0, 2 * r, 2 * r);
-    ball->Transparent=true;*/
+    srand(time(NULL));
+    vx = ((rand() % 2) * 2.0 - 1) * rand() * 6.0 / RAND_MAX;
+    vy = - sqrt((double)maxv * maxv - vx * vx);
   }
   // ------------------------------
   // Назначение: Функция передвижения шарика
@@ -226,8 +232,29 @@ public:
                     MB_DEFAULT_DESKTOP_ONLY
                   );
         free(ball1);
+        free(arcon1);
+        for (int i = 0; i < 400; i++)
+          free(blocks[i]);
         if (b == IDYES)
-          ball1 = new ball();
+        {
+          ball1=new ball();
+          arcon1 = new arcon();
+          int b = MessageBox( NULL, "Загрузить уровень 1? (Иначе загрузиться уровень 2)",
+                              "Выбор уровня",
+                              MB_YESNO |
+                              MB_DEFBUTTON1 |
+                              MB_ICONEXCLAMATION |
+                              MB_DEFAULT_DESKTOP_ONLY
+                             );
+          int lvl;
+          if (b == IDYES)
+            lvl = 0;
+          else
+            lvl = 1;
+          for(int i = 0; i < 400; i++)
+            blocks[i] = new block((i % 20) * Form1->ClientWidth / 20,
+                                  (i / 20) * Form1->ClientHeight / 30, LevelData[lvl][i]);
+        }
         else
           exit(0);
       }
@@ -254,43 +281,108 @@ public:
   // ------------------------------
 void Collision (ball *ball1, arcon *arcon1)
 {
-  static bool IsCol = true;
+  //static bool IsCol = true;
   double x1 = arcon1->x, x2 = ball1->x,
          y1 = arcon1->y, y2 = ball1->y;
   double len2 = (x1 - x2) * (x1 - x2) +
                 (y1 - y2) * (y1 - y2);
-  if (len2 <= (ball1->r + arcon1->r) * (ball1->r + arcon1->r) && !IsCol)
+  if (len2 <= (ball1->r + arcon1->r) * (ball1->r + arcon1->r)/* && !IsCol*/)
   {
     double nx = x2 - x1, ny = y2 - y1,
       nlen = sqrt(nx * nx + ny * ny);
     double cosa = (nx / nlen), sina = -(ny / nlen);
     double nvx = ball1->maxv * (ball1->vx * nx + ball1->vy * ny) / ball1->maxv / nlen,
       nvy = sqrt(ball1->maxv * ball1->maxv - nvx * nvx);
-    //nvx = -ABS(nvx);
-    if (cosa < - ball1->vx / ball1->maxv)
+    if (ball1->vx * nx + ball1->vy * ny > 0)
+      nvx = -ball1->maxv, nvy = 0;
+    else if (cosa < - ball1->vx / ball1->maxv)
       nvy = -nvy;
     ball1->vx = - nvx * cosa + nvy * sina;
     ball1->vy = nvx * sina + nvy * cosa;
-    IsCol = true;
+    //IsCol = true;
   }
-  else if (len2 > (ball1->r + arcon1->r) * (ball1->r + arcon1->r))
-    IsCol = false;
+  /*else if (len2 > (ball1->r + arcon1->r) * (ball1->r + arcon1->r))
+    IsCol = false;*/
+}
+
+void Collision (ball *ball1, block *block1)
+{
+  if (block1->lifes == 0)
+    return;
+  if (ball1->x >= block1->x && ball1->x < block1->x + block1->width)
+  {
+    if (ball1->y >= block1->y - ball1->r && ball1->y < block1->y + block1->height + ball1->r)
+      ball1->vy *= -1, block1->lifes--;
+  }
+  else if (ball1->y >= block1->y && ball1->y < block1->y + block1->height)
+  {
+    if (ball1->x >= block1->x - ball1->r && ball1->x < block1->x + block1->width + ball1->r)
+      ball1->vx *= -1, block1->lifes--;
+  }
+  else if (ball1->y >= block1->y - ball1->r && ball1->y < block1->y &&
+           ball1->x >= block1->x - ball1->r && ball1->x < block1->x)
+  {
+    double nx = ball1->x - block1->x, ny = ball1->y - block1->y,
+      nlen = sqrt(nx * nx + ny * ny);
+    double cosa = (nx / nlen), sina = (ny / nlen);
+    ball1->vx = - ABS(ball1->maxv * cosa),
+    ball1->vy = - ABS(ball1->maxv * sina),
+    block1->lifes--;
+  }
+  else if (ball1->y >= block1->y - ball1->r && ball1->y < block1->y &&
+           ball1->x >= block1->x + block1->width && ball1->x < block1->x + block1->width + ball1->r)
+  {
+    double nx = ball1->x - block1->x, ny = ball1->y - block1->y,
+      nlen = sqrt(nx * nx + ny * ny);
+    double cosa = (nx / nlen), sina = (ny / nlen);
+    ball1->vx = ABS(ball1->maxv * cosa),
+    ball1->vy = - ABS(ball1->maxv * sina),
+    block1->lifes--;
+  }
+  else if (ball1->y >= block1->y + block1->height && ball1->y < block1->y + block1->height + ball1->r &&
+           ball1->x >= block1->x - ball1->r && ball1->x < block1->x)
+  {
+    double nx = ball1->x - block1->x, ny = ball1->y - block1->y,
+      nlen = sqrt(nx * nx + ny * ny);
+    double cosa = (nx / nlen), sina = (ny / nlen);
+    ball1->vx = - ABS(ball1->maxv * cosa),
+    ball1->vy = ABS(ball1->maxv * sina),
+    block1->lifes--;
+  }
+  else if (ball1->y >= block1->y + block1->height && ball1->y < block1->y + block1->height + ball1->r &&
+           ball1->x >= block1->x + block1->width && ball1->x < block1->x + block1->width + ball1->r)
+  {
+    double nx = ball1->x - block1->x, ny = ball1->y - block1->y,
+      nlen = sqrt(nx * nx + ny * ny);
+    double cosa = (nx / nlen), sina = (ny / nlen);
+    ball1->vx = ABS(ball1->maxv * cosa),
+    ball1->vy = ABS(ball1->maxv * sina),
+    block1->lifes--;
+  }
 }
 
 void __fastcall TForm1::FormCreate(TObject *Sender)
 {
-back=new Graphics::TBitmap();
-back->Width=Form1->ClientWidth;
-back->Height=Form1->ClientHeight;
-ball1=new ball();
-arcon1 = new arcon();
-/*Bita=new Graphics::TBitmap();
-Bita->LoadFromFile("Бита.bmp");
-Bita->Transparent=true;*/
-//dx=Form1->ClientWidth;
-//dy=Form1->ClientHeight;
-//LoadBlockPicture();
-//LoadLevel(CurrentLevel);
+  back=new Graphics::TBitmap();
+  back->Width=Form1->ClientWidth;
+  back->Height=Form1->ClientHeight;
+  ball1=new ball();
+  arcon1 = new arcon();
+  int b = MessageBox( NULL, "Загрузить уровень 1? (Иначе загрузиться уровень 2)",
+                    "Выбор уровня",
+                    MB_YESNO |
+                    MB_DEFBUTTON1 |
+                    MB_ICONEXCLAMATION |
+                    MB_DEFAULT_DESKTOP_ONLY
+                  );
+  int lvl;
+  if (b == IDYES)
+    lvl = 0;
+  else
+    lvl = 1;
+  for(int i = 0; i < 400; i++)
+    blocks[i] = new block((i % 20) * Form1->ClientWidth / 20,
+                               (i / 20) * Form1->ClientHeight / 30, LevelData[lvl][i]);
 }
 
   // ------------------------------
@@ -304,11 +396,30 @@ void __fastcall TForm1::Timer1Timer(TObject *Sender)
   back->Canvas->Rectangle(0, 0, back->Width, back->Height);
   ball1->Draw();
   arcon1->Draw();
+  for (int i = 0; i < 400; i++)
+    blocks[i]->Draw();
   ball1->Move();
   arcon1->Move();
   //GetCursorPos(&p);
   Collision(ball1, arcon1);
+  for (int i = 0; i < 400; i++)
+    Collision(ball1, blocks[i]);
   Form1->Canvas->Draw(0,0,back);
+  IsComplite = true;
+  for (int i = 0; i < 400; i++)
+    if(blocks[i]->IsAlive())
+      IsComplite = false;
+  if (IsComplite)
+  {
+    MessageBox( NULL, "Вы прошли уровень!",
+                    "Вы выиграли!",
+                    MB_OK |
+                    MB_DEFBUTTON1 |
+                    MB_ICONEXCLAMATION |
+                    MB_DEFAULT_DESKTOP_ONLY
+                  );
+    exit(0);
+  }
 }
 
 

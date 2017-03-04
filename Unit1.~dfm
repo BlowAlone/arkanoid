@@ -1,6 +1,6 @@
 object Form1: TForm1
-  Left = 324
-  Top = 97
+  Left = 540
+  Top = 136
   BorderIcons = [biSystemMenu]
   BorderStyle = bsSingle
   Caption = 'Form1'
